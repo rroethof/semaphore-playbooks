@@ -1,0 +1,94 @@
+# playbooks/os-update.yml
+---
+- name: OS Updates
+  hosts: all:!unmanaged
+  gather_facts: true
+  become: true
+
+  handlers:
+    - name: Reboot host
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 30
+        msg: "Reboot triggered by OS update"
+
+  tasks:
+    # --- Debian / Ubuntu ---
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Upgrade apt packages
+      ansible.builtin.apt:
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+
+    - name: Remove apt orphans
+      ansible.builtin.apt:
+        autoremove: true
+        purge: true
+      when: ansible_os_family == "Debian"
+
+    - name: Check if Debian reboot required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      when: ansible_os_family == "Debian"
+
+    - name: Reboot if Debian kernel updated
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 30
+        msg: "Reboot triggered by kernel update"
+      when:
+        - ansible_os_family == "Debian"
+        - reboot_required.stat is defined
+        - reboot_required.stat.exists
+
+    # --- RedHat / Rocky / AlmaLinux ---
+    - name: Upgrade dnf packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if RedHat reboot required
+      ansible.builtin.command: needs-restarting -r
+      register: redhat_reboot_required
+      failed_when: false
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+
+    - name: Reboot if RedHat kernel updated
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 30
+        msg: "Reboot triggered by kernel update"
+      when:
+        - ansible_os_family == "RedHat"
+        - redhat_reboot_required.rc is defined
+        - redhat_reboot_required.rc == 1
+
+    # --- Arch Linux ---
+    - name: Upgrade pacman packages
+      community.general.pacman:
+        update_cache: true
+        upgrade: true
+      when: ansible_os_family == "Archlinux"
+      notify: Reboot host
+
+    # --- FreeBSD ---
+    - name: Update FreeBSD pkg cache
+      ansible.builtin.command: pkg update
+      when: ansible_os_family == "FreeBSD"
+      changed_when: false
+
+    - name: Upgrade FreeBSD packages
+      community.general.pkgng:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "FreeBSD"
+      notify: Reboot host

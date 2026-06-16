@@ -1,0 +1,10 @@
+# playbooks/ping.yml
+---
+- name: Ping all managed hosts
+  hosts: all:!unmanaged
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:

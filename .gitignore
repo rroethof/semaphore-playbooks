@@ -1,0 +1,8 @@
+# .gitignore
+*.retry
+*.log
+.vault_pass
+*.pem
+*.key
+__pycache__/
+.cache/
